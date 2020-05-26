@@ -8,6 +8,6 @@ bot_token = "YOUR_TOKEN"
 then
 
 ```
-pip install -r requirements.txt
-python bot.py
+pip3 install -r requirements.txt
+python3 bot.py
 ```
