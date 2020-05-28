@@ -1,4 +1,4 @@
-#### Getting started
+### Getting started
 
 Create a `config.py` file at top level with
 ```
