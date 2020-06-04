@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 
-import kvstore
+from .kvstore import *
 
 """
 WIP: 
@@ -10,13 +10,14 @@ Figure out user information
 Figure out global vs server tags
 """
 
+
 class Tagging(commands.Cog):
     """Keyword tagging, WIP"""
 
     def __init__(self, bot):
         self.bot = bot
         self.lookup = DictKeyValueStore()
-        self.usage = None # TODO
+        self.usage = None  # TODO
 
     @commands.command()
     async def create(self, ctx):
@@ -31,18 +32,19 @@ class Tagging(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.author.bot:
-            words = _parse_message(message)
+            words = self._parse_message(message)
             for word in words:
                 if word in self.lookup:
                     await message.channel.send(self.lookup.get(word))
-                    _mark_usage(message, word)
-                    break # only allow one match per message
+                    self._mark_usage(message, word)
+                    break  # only allow one match per message
 
-    def _parse_message(message):
+    def _parse_message(self, message):
         return message.content.split(' ')
 
-    def _mark_usage(message, word):
+    def _mark_usage(self, message, word):
         pass
+
 
 def setup(bot):
     bot.add_cog(Tagging(bot))

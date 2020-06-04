@@ -6,7 +6,7 @@ bot = commands.Bot(command_prefix='z!')
 
 extensions = [
     'cogs.misc',
-    'cogs.tagging.tagging' # TODO: how does __init__.py work again? can this be just cogs.tagging
+    'cogs.tagging'
 ]
 
 @bot.event

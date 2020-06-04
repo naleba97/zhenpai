@@ -1,5 +1,6 @@
 import typing
 
+
 class TaggingItem(object):
     """
     Thing to be retrieved, can be an image file, a gif, a soundbite, 
@@ -7,15 +8,14 @@ class TaggingItem(object):
     """
     pass
 
+
 class BaseKeyValueStore(object):
     def get(self, key: str) -> TaggingItem:
         raise NotImplementedError
 
-    def get_all(self) -> Generator[TaggingItem, None, None]: # I'm pretty sure this is just __iter__()
-        raise NotImplementedError
-
     def __contains__(self, key: str):
         raise NotImplementedError
+
 
 class DictKeyValueStore(BaseKeyValueStore):
     def __init__(self):
