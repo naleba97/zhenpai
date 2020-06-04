@@ -44,7 +44,3 @@ class Tagging(commands.Cog):
 
     def _mark_usage(self, message, word):
         pass
-
-
-def setup(bot):
-    bot.add_cog(Tagging(bot))
