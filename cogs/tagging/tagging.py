@@ -1,7 +1,7 @@
 import atexit
-import typing
+import re
 from pathlib import Path
-from os import path
+from discord import File
 from discord.ext import commands
 from discord.embeds import Embed
 
@@ -44,7 +44,8 @@ class Tagging(commands.Cog):
             self.lookup[command_name] = TaggingItem(url=attachment.url,
                                                     local_url=local_url,
                                                     creator_id=ctx.message.author.id)
-            await ctx.send(content='Successfully created ' + command_name + ' linked to ' + self.lookup[command_name].local_url)
+            await ctx.send(
+                content='Successfully created ' + command_name + ' linked to ' + self.lookup[command_name].local_url)
         elif args:
             if len(args) >= 2:
                 pass
@@ -72,13 +73,14 @@ class Tagging(commands.Cog):
         if not message.author.bot:
             words = self._parse_message(message)
             for word in words:
+                word = self.sanitize(word)
                 if word in self.lookup:
-                    await message.channel.send(embed=Embed().set_image(url=self.lookup.get(word).url))
+                    await message.channel.send(file=File(self.lookup[word].local_url))
                     self._mark_usage(message, word)
                     break  # only allow one match per message
 
-    def cleanup(self):
-        self.lookup.save(path.join(DB_PATH, DB_FILENAME))
+    def sanitize(self, word):
+        return re.sub('[\W_]+', '', word)
 
     def _parse_message(self, message):
         return message.content.split(' ')
@@ -87,4 +89,5 @@ class Tagging(commands.Cog):
         self.lookup[word].counter += 1
         pass
 
-
+    def cleanup(self):
+        self.lookup.save(path.join(DB_PATH, DB_FILENAME))

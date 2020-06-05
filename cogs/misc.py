@@ -16,5 +16,6 @@ class Misc(commands.Cog):
     async def echo(self, ctx, content):
         await ctx.send(content)
 
+
 def setup(bot):
     bot.add_cog(Misc(bot))
