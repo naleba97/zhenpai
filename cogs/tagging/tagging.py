@@ -30,7 +30,8 @@ class Tagging(commands.Cog):
     @commands.command()
     async def create(self, ctx: commands.Context, *args):
         """
-        Creates a tag from the two following valid command formats:
+        Creates and links a tag to an image.
+        Valid command formats:
             "z!create foo" with an attachment of an image named bar
             "z!create foo https://path.to/bar.png"
         """
@@ -60,6 +61,11 @@ class Tagging(commands.Cog):
             embed = embed.add_field(name=k, value="[Link]({link})\nCreator: {creator}\nNumber of Times Used: {num}"
                                     .format(link=v.url, creator=creator.name, num=v.counter))
         await ctx.send(embed=embed)
+
+    @commands.command()
+    async def debug(self, ctx):
+        """Used for debugging"""
+        pass
 
     @commands.Cog.listener()
     async def on_message(self, message):

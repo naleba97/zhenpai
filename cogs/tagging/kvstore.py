@@ -10,7 +10,7 @@ class TaggingItem(object):
     a url with an embed preview, a youtube link, a text document, etc.
     """
 
-    def __init__(self, url: str, local_url: str, creator_id: int):
+    def __init__(self, url: str = None, local_url: str = None, creator_id: int = None):
         self._url = url
         self._local_url = local_url
         self._creator_id = creator_id
@@ -47,6 +47,24 @@ class TaggingItem(object):
     @creator_id.setter
     def creator_id(self, value):
         self._creator_id = value
+
+    def to_dict(self):
+        result = {
+            key[1:]: getattr(self, key)
+            for key in self.__dict__
+            if key[0] == '_' and hasattr(self, key)
+        }
+        return result
+
+    def from_dict(self, data):
+        for attr in ('url', 'local_url', 'creator_id', 'counter'):
+            try:
+                value = data[attr]
+            except KeyError:
+                continue
+            else:
+                setattr(self, '_' + attr, value)
+        return self
 
 
 class BaseKeyValueStore(metaclass=abc.ABCMeta):
@@ -99,7 +117,7 @@ class DictKeyValueStore(BaseKeyValueStore):
         try:
             with open(file, 'rb') as handle:
                 saved_kvstore = pickle.load(handle)
-                self.kvstore = saved_kvstore
+                self.from_dict(saved_kvstore)
         except (IOError, OSError, EOFError) as e:
             print("Warn: could not load tags from disk")
         return self
@@ -107,8 +125,16 @@ class DictKeyValueStore(BaseKeyValueStore):
     def save(self, file):
         try:
             with open(file, 'wb') as handle:
-                pickle.dump(self.kvstore, handle)
+                pickle.dump(self.to_dict(), handle)
         except (IOError, OSError) as e:
-            print("Fatal error: could not save tags")
+            print("Fatal: could not save tags")
 
+    def to_dict(self):
+        dict_ = {}
+        for k, v in self:
+            dict_[k] = v.to_dict()
+        return dict_
 
+    def from_dict(self, dict_):
+        for k, v in dict_.items():
+            self.kvstore[k] = TaggingItem().from_dict(v)
