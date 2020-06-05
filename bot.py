@@ -9,10 +9,12 @@ extensions = [
     'cogs.tagging'
 ]
 
+
 @bot.event
 async def on_ready():
     print('Logged in as: ', bot.user)
     print('Discord.py version: ', discord.__version__)
+
 
 @bot.event
 async def on_message(message):
