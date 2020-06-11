@@ -106,52 +106,66 @@ class BaseKeyValueStore(metaclass=abc.ABCMeta):
 
 class DictKeyValueStore(BaseKeyValueStore):
     def __init__(self):
-        self.kvstore: Dict[str, TaggingItem] = {}  # TODO: load from a pickle file, not sure when we save though
+        self.kvstore: Dict[str, Dict[str, TaggingItem]] = {}  # TODO: load from a pickle file, not sure when we save though
+        self.load()
 
     def __getitem__(self, key: str) -> TaggingItem:
-        return self.kvstore.get(key)
+        server_id, tag_name = get_values_from_redis_key(key)
+        return self.kvstore[server_id][tag_name]
 
     def __setitem__(self, key: str, value: TaggingItem):
-        self.kvstore[key] = value
+        server_id, tag_name = get_values_from_redis_key(key)
+        if server_id not in self.kvstore:
+            self.kvstore[server_id] = {}
+        self.kvstore[server_id][tag_name] = value
 
     def __contains__(self, key: str):
-        return key in self.kvstore
-
-    def __iter__(self):
-        return iter(self.kvstore.items())
+        server_id, tag_name = get_values_from_redis_key(key)
+        return tag_name in self.kvstore[server_id]
 
     def get(self, key: str) -> TaggingItem:
-        return self.kvstore.get(key)
+        server_id, tag_name = get_values_from_redis_key(key)
+        return self.kvstore[server_id][tag_name]
 
     def put(self, key: str, value: TaggingItem):
-        self.kvstore[key] = value
-        return self
+        server_id, tag_name = get_values_from_redis_key(key)
+        if server_id not in self.kvstore:
+            self.kvstore[server_id] = {}
+        self.kvstore[server_id][tag_name] = value
 
-    def load(self, file):
+    def get_paged(self, server_id: str, cursor: int = 0):
+        if server_id not in self.kvstore:
+            return {}
+        return self.kvstore[server_id]
+
+    def load(self):
         try:
-            with open(file, 'rb') as handle:
+            with open(path.join(DB_PATH, DB_FILENAME), 'rb') as handle:
                 saved_kvstore = pickle.load(handle)
                 self.from_dict(saved_kvstore)
         except (IOError, OSError, EOFError) as e:
             print("Warn: could not load tags from disk")
-        return self
 
-    def save(self, file):
+    def save(self):
         try:
-            with open(file, 'wb') as handle:
+            with open(path.join(DB_PATH, DB_FILENAME), 'wb') as handle:
                 pickle.dump(self.to_dict(), handle)
         except (IOError, OSError) as e:
             print("Fatal: could not save tags")
 
     def to_dict(self):
         dict_ = {}
-        for k, v in self:
-            dict_[k] = v.to_dict()
+        for server, emojis in self.kvstore.items():
+            dict_[server] = {}
+            for tag_name, v in emojis.items():
+                dict_[server][tag_name] = v.to_dict()
         return dict_
 
     def from_dict(self, dict_):
-        for k, v in dict_.items():
-            self.kvstore[k] = TaggingItem().from_dict(v)
+        for server, emojis in dict_.items():
+            self.kvstore[server] = {}
+            for tag_name, v in emojis.items():
+                self.kvstore[server][tag_name] = TaggingItem().from_dict(v)
 
 
 class RedisKeyValueStore(BaseKeyValueStore):

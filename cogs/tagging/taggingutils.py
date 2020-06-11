@@ -13,3 +13,7 @@ def parse_message(message: str):
 def create_redis_key(server_id: int, tag_name: str):
     return "server:{server_id}:tag:{tag_name}".format(server_id=server_id, tag_name=tag_name)
 
+
+def get_values_from_redis_key(key: str) -> Tuple[str, str]:
+    split = key.split(':')
+    return split[1], split[3]

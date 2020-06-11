@@ -24,8 +24,8 @@ class Tagging(commands.Cog):
         Path(IMAGES_PATH).mkdir(parents=True, exist_ok=True)
         Path(DB_PATH).mkdir(parents=True, exist_ok=True)
         self.bot = bot
-        # self.lookup = DictKeyValueStore().load(path.join(DB_PATH, DB_FILENAME))
-        self.lookup = RedisKeyValueStore(ip='localhost', port=6379)
+        self.lookup = DictKeyValueStore()
+        # self.lookup = RedisKeyValueStore(ip='localhost', port=6379)
         self.usage = None  # TODO
         atexit.register(self.cleanup)
 
@@ -63,13 +63,20 @@ class Tagging(commands.Cog):
     async def list(self, ctx):
         """Lists out all tags."""
         embed = Embed(title='List of Registered Tags')
-        cursor, keys = self.lookup.get_paged(server_id=ctx.guild.id)
-        for k in keys:
-            v = self.lookup[k]
-            creator = await self.bot.fetch_user(v.creator_id)
-            embed = embed.add_field(name=v.name,
-                                    value="[Link]({link})\nCreator: {creator}"
-                                    .format(link=v.url, creator=creator.name))
+        if isinstance(self.lookup, DictKeyValueStore):
+            for k, v in self.lookup.get_paged(server_id=str(ctx.guild.id)).items():
+                creator = await self.bot.fetch_user(v.creator_id)
+                embed = embed.add_field(name=v.name,
+                                        value="[Link]({link})\nCreator: {creator}"
+                                        .format(link=v.url, creator=creator.name))
+        elif isinstance(self.lookup, RedisKeyValueStore):
+            cursor, keys = self.lookup.get_paged(server_id=ctx.guild.id)
+            for k in keys:
+                v = self.lookup[k]
+                creator = await self.bot.fetch_user(v.creator_id)
+                embed = embed.add_field(name=v.name,
+                                        value="[Link]({link})\nCreator: {creator}"
+                                        .format(link=v.url, creator=creator.name))
         await ctx.send(embed=embed)
 
     @commands.command()
