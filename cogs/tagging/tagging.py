@@ -29,7 +29,12 @@ class Tagging(commands.Cog):
         self.usage = None  # TODO
         atexit.register(self.cleanup)
 
-    @commands.command()
+    @commands.group()
+    async def tag(self, ctx):
+        if ctx.invoked_subcommand is None:
+            await ctx.send('Valid subcommands are \'create\', \'list\', and \'delete\'.')
+
+    @tag.command()
     async def create(self, ctx: commands.Context, tag_name: str, link: str = None):
         """
         Creates and links a tag to an image.
@@ -59,7 +64,7 @@ class Tagging(commands.Cog):
         else:
             await ctx.send('Usage: z!create <tag name: str> with an attachment')
 
-    @commands.command()
+    @tag.command()
     async def list(self, ctx):
         """Lists out all tags."""
         embed = Embed(title='List of Registered Tags')
@@ -79,6 +84,10 @@ class Tagging(commands.Cog):
                                         .format(link=v.url, creator=creator.name))
         await ctx.send(embed=embed)
 
+    @tag.command()
+    async def delete(self, ctx: commands.Context, *args):
+        pass
+    
     @commands.command()
     async def debug(self, ctx):
         """Used for debugging"""
