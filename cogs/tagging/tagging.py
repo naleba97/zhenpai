@@ -7,6 +7,7 @@ from discord.embeds import Embed
 
 from .kvstore import *
 from .constants import *
+from .taggingutils import *
 
 """
 WIP: 
@@ -23,12 +24,13 @@ class Tagging(commands.Cog):
         Path(IMAGES_PATH).mkdir(parents=True, exist_ok=True)
         Path(DB_PATH).mkdir(parents=True, exist_ok=True)
         self.bot = bot
-        self.lookup = DictKeyValueStore().load(path.join(DB_PATH, DB_FILENAME))
+        # self.lookup = DictKeyValueStore().load(path.join(DB_PATH, DB_FILENAME))
+        self.lookup = RedisKeyValueStore(ip='localhost', port=6379)
         self.usage = None  # TODO
         atexit.register(self.cleanup)
 
     @commands.command()
-    async def create(self, ctx: commands.Context, *args):
+    async def create(self, ctx: commands.Context, tag_name: str, link: str = None):
         """
         Creates and links a tag to an image.
         Valid command formats:
@@ -36,18 +38,22 @@ class Tagging(commands.Cog):
             "z!create foo https://path.to/bar.png"
         """
         attachments = ctx.message.attachments
-        if args and attachments:
+        if tag_name and attachments:
             attachment = attachments[0]
-            command_name = args[0]
-            local_url = path.join(IMAGES_PATH, attachment.filename)
+            command_name = sanitize(tag_name)
+            guild_id = ctx.guild.id
+            key = create_redis_key(guild_id, command_name)
+            server_path = path.join(IMAGES_PATH, str(guild_id))
+            Path(server_path).mkdir(parents=True, exist_ok=True)
+            local_url = path.join(server_path, attachment.filename)
             await attachment.save(local_url)
-            self.lookup[command_name] = TaggingItem(url=attachment.url,
-                                                    local_url=local_url,
-                                                    creator_id=ctx.message.author.id)
+            self.lookup[key] = TaggingItem(name=command_name,
+                                           url=attachment.url,
+                                           local_url=local_url,
+                                           creator_id=ctx.message.author.id)
             await ctx.send(
-                content='Successfully created ' + command_name + ' linked to ' + self.lookup[command_name].local_url)
-        elif args:
-            if len(args) >= 2:
+                content='Successfully created ' + command_name + ' linked to ' + self.lookup[key].local_url)
+        elif tag_name and link:
                 pass
                 # TODO: sanitize and check that the second argument is an URL.
         else:
@@ -57,10 +63,13 @@ class Tagging(commands.Cog):
     async def list(self, ctx):
         """Lists out all tags."""
         embed = Embed(title='List of Registered Tags')
-        for k, v in self.lookup:
+        cursor, keys = self.lookup.get_paged(server_id=ctx.guild.id)
+        for k in keys:
+            v = self.lookup[k]
             creator = await self.bot.fetch_user(v.creator_id)
-            embed = embed.add_field(name=k, value="[Link]({link})\nCreator: {creator}\nNumber of Times Used: {num}"
-                                    .format(link=v.url, creator=creator.name, num=v.counter))
+            embed = embed.add_field(name=v.name,
+                                    value="[Link]({link})\nCreator: {creator}"
+                                    .format(link=v.url, creator=creator.name))
         await ctx.send(embed=embed)
 
     @commands.command()
@@ -71,23 +80,17 @@ class Tagging(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.author.bot:
-            words = self._parse_message(message)
+            words = parse_message(message)
             for word in words:
-                word = self.sanitize(word)
-                if word in self.lookup:
-                    await message.channel.send(file=File(self.lookup[word].local_url))
-                    self._mark_usage(message, word)
+                word = sanitize(word)
+                key = create_redis_key(message.guild.id, word)
+                if key in self.lookup:
+                    await message.channel.send(file=File(self.lookup[key].local_url))
+                    self.mark_usage(key)
                     break  # only allow one match per message
 
-    def sanitize(self, word):
-        return re.sub('[\W_]+', '', word)
-
-    def _parse_message(self, message):
-        return message.content.split(' ')
-
-    def _mark_usage(self, message, word):
-        self.lookup[word].counter += 1
+    def mark_usage(self, tag):
         pass
 
     def cleanup(self):
-        self.lookup.save(path.join(DB_PATH, DB_FILENAME))
+        self.lookup.save()

@@ -1,8 +1,14 @@
 import abc
 import pickle
+import redis
 from os import path
 from typing import Dict
+from typing import AnyStr
+from typing import List
+from typing import Tuple
 
+from .constants import *
+from .taggingutils import *
 
 class TaggingItem(object):
     """
@@ -10,39 +16,39 @@ class TaggingItem(object):
     a url with an embed preview, a youtube link, a text document, etc.
     """
 
-    def __init__(self, url: str = None, local_url: str = None, creator_id: int = None):
+    def __init__(self, name: str = None, url: str = None, local_url: str = None, creator_id: int = None):
+        self._name = name
         self._url = url
         self._local_url = local_url
         self._creator_id = creator_id
-        self._counter = 0
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value: str):
+        self._name = value
 
     @property
     def url(self):
         return self._url
 
+    @url.setter
+    def url(self, value):
+        self._url = value
+
     @property
     def local_url(self):
         return self._local_url
-
-    @property
-    def creator_id(self):
-        return self._creator_id
-
-    @property
-    def counter(self):
-        return self._counter
-
-    @counter.setter
-    def counter(self, value: int):
-        self._counter = value
 
     @local_url.setter
     def local_url(self, value):
         self._local_url = value
 
-    @url.setter
-    def url(self, value):
-        self._url = value
+    @property
+    def creator_id(self):
+        return self._creator_id
 
     @creator_id.setter
     def creator_id(self, value):
@@ -57,7 +63,7 @@ class TaggingItem(object):
         return result
 
     def from_dict(self, data):
-        for attr in ('url', 'local_url', 'creator_id', 'counter'):
+        for attr in ('name', 'url', 'local_url', 'creator_id'):
             try:
                 value = data[attr]
             except KeyError:
@@ -87,6 +93,14 @@ class BaseKeyValueStore(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def __contains__(self, key: str):
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def get(self, key: str) -> TaggingItem:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def put(self, key: str, value: TaggingItem):
         raise NotImplementedError
 
 
@@ -138,3 +152,31 @@ class DictKeyValueStore(BaseKeyValueStore):
     def from_dict(self, dict_):
         for k, v in dict_.items():
             self.kvstore[k] = TaggingItem().from_dict(v)
+
+
+class RedisKeyValueStore(BaseKeyValueStore):
+    def __init__(self, ip: AnyStr, port: int):
+        self.conn = redis.Redis(host=ip, port=port, db=0, charset='utf-8', decode_responses=True)
+
+    def __getitem__(self, key: str) -> TaggingItem:
+        values = self.conn.hgetall(key)
+        return TaggingItem().from_dict(values)
+
+    def __setitem__(self, key: str, value: TaggingItem):
+        self.conn.hset(key, mapping=value.to_dict())
+
+    def __contains__(self, key: str):
+        return self.conn.exists(key)
+
+    def get(self, key: str) -> TaggingItem:
+        values = self.conn.hgetall(key)
+        return TaggingItem().from_dict(values)
+
+    def get_paged(self, server_id: str, count=10, cursor=0) -> Tuple[int, List]:
+        return self.conn.scan(cursor=cursor, match="*{0}*".format(server_id), count=count)
+
+    def put(self, key: str, value: TaggingItem):
+        self.conn.hset(key, mapping=value.to_dict())
+
+    def save(self):
+        pass
