@@ -6,8 +6,8 @@ from discord.ext import commands
 from discord.embeds import Embed
 
 from .kvstore import *
-from .constants import *
-from .taggingutils import *
+from . import constants
+from . import taggingutils
 
 """
 WIP: 
@@ -21,8 +21,8 @@ class Tagging(commands.Cog):
     """Keyword tagging, WIP"""
 
     def __init__(self, bot):
-        Path(IMAGES_PATH).mkdir(parents=True, exist_ok=True)
-        Path(DB_PATH).mkdir(parents=True, exist_ok=True)
+        Path(constants.IMAGES_PATH).mkdir(parents=True, exist_ok=True)
+        Path(constants.DB_PATH).mkdir(parents=True, exist_ok=True)
         self.bot = bot
         self.lookup = DictKeyValueStore()
         # self.lookup = RedisKeyValueStore(ip='localhost', port=6379)
@@ -45,10 +45,10 @@ class Tagging(commands.Cog):
         attachments = ctx.message.attachments
         if tag_name and attachments:
             attachment = attachments[0]
-            command_name = sanitize(tag_name)
+            command_name = taggingutils.sanitize(tag_name)
             guild_id = ctx.guild.id
-            key = create_redis_key(guild_id, command_name)
-            server_path = path.join(IMAGES_PATH, str(guild_id))
+            key = taggingutils.create_redis_key(guild_id, command_name)
+            server_path = path.join(constants.IMAGES_PATH, str(guild_id))
             Path(server_path).mkdir(parents=True, exist_ok=True)
             local_url = path.join(server_path, attachment.filename)
             await attachment.save(local_url)
@@ -86,9 +86,11 @@ class Tagging(commands.Cog):
 
     @tag.command()
     async def delete(self, ctx: commands.Context, *args):
-        pass
+        for tag_name in args:
+            key_name = taggingutils.create_redis_key(ctx.guild.id, tag_name)
+            self.lookup.delete(key_name)
     
-    @commands.command()
+    @tag.command()
     async def debug(self, ctx):
         """Used for debugging"""
         pass
@@ -96,10 +98,10 @@ class Tagging(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message):
         if not message.author.bot:
-            words = parse_message(message)
+            words = taggingutils.parse_message(message)
             for word in words:
-                word = sanitize(word)
-                key = create_redis_key(message.guild.id, word)
+                word = taggingutils.sanitize(word)
+                key = taggingutils.create_redis_key(message.guild.id, word)
                 if key in self.lookup:
                     await message.channel.send(file=File(self.lookup[key].local_url))
                     self.mark_usage(key)
