@@ -7,7 +7,8 @@ bot = commands.Bot(command_prefix='z!')
 
 extensions = [
     'cogs.misc',
-    'cogs.tagging'
+    'cogs.tagging',
+    'cogs.twitcasting'
 ]
 
 
