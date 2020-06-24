@@ -9,49 +9,56 @@ class SqliteConnection:
         self._create_channel_table()
 
     def _create_channel_table(self):
-        with self.connection:
-            self.connection.execute("""CREATE TABLE IF NOT EXISTS guilds 
-                (id string,
+        sql = """CREATE TABLE IF NOT EXISTS guilds 
+                (channel_id string,
                 webhook_id integer NOT NULL,
                 user_id text,
                 name text,
                 CONSTRAINT user_unique UNIQUE (id, webhook_id, user_id)
-                )""")
-
-    def select_records_by_id(self, id: str):
+                )"""
         with self.connection:
-            c = self.connection.execute("SELECT * FROM guilds WHERE id=(?)", [id])
+            self.connection.execute(sql)
+
+    def select_records_by_id(self, channel_id: str):
+        sql = "SELECT * FROM guilds WHERE channel_id = (?)"
+        with self.connection:
+            c = self.connection.execute(sql, [channel_id])
             return c.fetchall()
 
     def select_records_by_user_id(self, user_id: str):
+        sql = "SELECT * FROM guilds WHERE user_id = (?)"
         with self.connection:
-            c = self.connection.execute("SELECT * FROM guilds WHERE user_id=(?)", [user_id])
+            c = self.connection.execute(sql, [user_id])
             return c.fetchall()
 
-    def select_record(self, id: str, webhook_id: str, user_id: str):
+    def select_record(self, channel_id: str, webhook_id: str, user_id: str):
+        sql = "SELECT * FROM guilds WHERE channel_id = (?) AND webhook_id = (?) AND user_id = (?)"
         with self.connection:
-            c = self.connection.execute("SELECT * FROM guilds WHERE id=(?) AND webhook_id=(?) AND user_id=(?)",
-                                        [id, webhook_id, user_id])
+            c = self.connection.execute(sql, [channel_id, webhook_id, user_id])
             return c.fetchone()
 
-    def delete_record(self, id: str, user_id: str):
+    def delete_all_records(self, channel_id: str):
+        sql = "DELETE FROM guilds where channel_id = (?)"
         with self.connection:
-            c = self.connection.execute("DELETE FROM guilds WHERE id=(?) AND user_id=(?)",
-                                        [id, user_id])
-            return c.fetchone()
+            self.connection.execute(sql, [channel_id])
 
-    def insert_record(self, id: str, webhook_id: str, user_id: str, name: str):
+    def delete_record(self, channel_id: str, user_id: str):
+        sql = "DELETE FROM guilds WHERE channel_id = (?) AND user_id = (?)"
         with self.connection:
-            c = self.connection.execute("INSERT INTO guilds VALUES (?, ?, ?, ?)",
-                                        [id, webhook_id, user_id, name])
+            self.connection.execute(sql, [channel_id, user_id])
+
+    def insert_record(self, channel_id: str, webhook_id: str, user_id: str, name: str):
+        sql = "INSERT INTO guilds VALUES (?, ?, ?, ?)"
+        with self.connection:
+            c = self.connection.execute(sql, [channel_id, webhook_id, user_id, name])
             return c.fetchone()
 
     def update_name_of_record(self, user_id: str, name: str):
+        sql = "UPDATE guilds SET name = (?) WHERE user_id = (?)"
         with self.connection:
-            c = self.connection.execute("UPDATE guilds SET name = (?) WHERE user_id = (?)",
-                                        [name, user_id])
+            c = self.connection.execute(sql, [name, user_id])
 
-    def update_webhook_id_of_record(self, id: str, webhook_id: str):
+    def update_webhook_id_of_record(self, channel_id: str, webhook_id: str):
+        sql = "UPDATE guilds SET webhook_id = (?) WHERE channel_id = (?)"
         with self.connection:
-            c = self.conneciton.execute("UPDATE guilds SET webhook_id = (?) WHERE id = (?)",
-                                        [webhook_id, id])
+            c = self.connection.execute(sql, [webhook_id, channel_id])
