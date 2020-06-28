@@ -1,9 +1,8 @@
 from cogs import webserver
 from discord.ext import commands
-
-import config
 import discord
 import logging
+import os
 
 bot = commands.Bot(command_prefix='z!')
 
@@ -40,4 +39,8 @@ if __name__ == '__main__':
 
     webserver.start_server()
 
-bot.run(config.bot_token)
+if os.environ.get('DISCORD_BOT_TOKEN'):
+    bot.run(os.environ['DISCORD_BOT_TOKEN'])
+else:
+    import config
+    bot.run(config.bot_token)
