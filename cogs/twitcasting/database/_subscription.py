@@ -3,19 +3,28 @@ from typing import List
 
 
 class _DatabaseSubscriptions:
-    def get_sub(self, channel_id: str, webhook_id: str, twitcast_user_id: str) -> Subscription:
+    def get_sub(self, channel_id: str, twitcast_user_id: str) -> Subscription:
         """
-        Retrieves a subscription from the database filtered by the provided parameters.
-        :param channel_id: the ID of the Discord text channel the subscription belongs to
-        :param webhook_id: the ID of the webhook the subscription belongs to.
-        :param twitcast_user_id: the ID of the Twitcast user whose live events will post to the webhook.
-        :return: a single Subscription record.
+        Retrieves a subscription associated with a Discord text channel and Twitcast user ID.
+        :param channel_id: the id of the text channel.
+        :param guild_id: the ID of the guild.
+        :param twitcast_user_id: the ID of the Twitcast user.
+        :return: a Subscription record associated with the Twitcast user and channel_id.
         """
-        return self.session.query(Subscription)\
-            .filter(Subscription.channel_id == channel_id)\
-            .filter(Subscription.webhook_id == webhook_id)\
-            .filter(Subscription.twitcast_user_id == twitcast_user_id)\
+        return self.session.query(Subscription) \
+            .filter(Subscription.channel_id == channel_id) \
+            .filter(Subscription.twitcast_user_id == twitcast_user_id) \
             .first()
+
+    def get_subs_by_guild(self, guild_id: str) -> List[Subscription]:
+        """
+        Retrieves all subscriptions associated with a Discord guild/server.
+        :param guild_id: the ID of the Discord guild/server
+        :return: list of Subscription records associated with a Discord guild/server.
+        """
+        return self.session.query(Subscription) \
+            .filter(Subscription.guild_id == guild_id) \
+            .all()
 
     def get_subs_by_channel(self, channel_id: str) -> List[Subscription]:
         """
@@ -46,6 +55,14 @@ class _DatabaseSubscriptions:
         return self.session.query(Subscription) \
             .filter(Subscription.twitcast_user_id == twitcast_user_id) \
             .count()
+
+    def remove_sub(self, sub: Subscription):
+        """
+        Adds a subscription from a text channel.
+        :param sub: the subscription to add to the database.
+        :return:
+        """
+        self.session.delete(sub)
 
     def remove_sub_from_channel_by_user_id(self, channel_id: str, twitcast_user_id: str):
         """
@@ -86,13 +103,3 @@ class _DatabaseSubscriptions:
         """
         for sub in self.get_subs_by_user_id(twitcast_user_id):
             sub.twitcast_name = twitcast_name
-
-    def update_webhook_id_of_channel(self, channel_id: str, webhook_id: str):
-        """
-        Updates the webhook ID of a channel. Used when subscriptions are reassigned to another webhook.
-        :param channel_id: the ID of a text channel.
-        :param webhook_id: the ID of the updated webhook.
-        :return:
-        """
-        for sub in self.get_subs_by_channel(channel_id):
-            sub.webhook_id = webhook_id

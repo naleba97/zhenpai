@@ -21,10 +21,10 @@ class Twitcasting(commands.Cog):
         self.logger = logging.getLogger('zhenpai.twitcasting')
         self.bot = bot
         self.twitcasting = None
-        self.init_API()
+        self.init_api()
         self.db = TwitcastDatabase()
 
-    def init_API(self):
+    def init_api(self):
         if os.path.isfile('config.py'):
             from . import config
             client_id = config.TWITCAST_CLIENT_ID
@@ -46,38 +46,12 @@ class Twitcasting(commands.Cog):
             await ctx.send(f'```{help_text}```')
 
     @tc.command()
-    async def setup(self, ctx, webhook_name: str):
-        """
-        Sets up the text channel for twitcasting bot usage by creating a webhook with the provided name.
-            Usage: z!tc setup <name-of-webhook>
-        """
-        channel_id = f'{ctx.guild.id}:{ctx.channel.id}'
-        res = self.db.get_subs_by_channel(channel_id=channel_id)
-        if not res:
-            webhook = await ctx.channel.create_webhook(name=webhook_name)
-            self.db.add_sub(Subscription(channel_id, webhook.id, None, None))
-            await ctx.send(f"""Created webhook with name {webhook_name}.""")
-            self.db.commit()
-        else:
-            await ctx.send(f"""Text channel has already been setup with id, {res[0].webhook_id}
-                            Please run z!tc rename <new-webhook-name> to point subscriptions to new webhook.""")
-
-    @tc.command()
     async def search(self, ctx, query: str):
         """
-        Searches twitcasting for up to three users that closely matches the provided query.
+        Searches Twitcasting for up to three users that closely matches the provided query.
             Usage: z!tc search <arg1> <arg2> ...
         """
-        channel_id = f'{ctx.guild.id}:{ctx.channel.id}'
-        res = self.db.get_subs_by_channel(channel_id=channel_id)
-        if not res:
-            await ctx.send("""You have not setup this channel for creating webhooks! 
-                            Run ```z!tc setup <name-of-webhook>``` to create a webhook for this channel.""")
-            return
-        webhook_id = res[0].webhook_id
-        webhook = await self.bot.fetch_webhook(webhook_id)
         users = self.twitcasting.search_users(words=query, limit=3)
-        embeds = []
         for user in users:
             embed_dict = {
                 'title': user.name,
@@ -85,118 +59,109 @@ class Twitcasting(commands.Cog):
                 'description': f'''ID: {user.id}
                                 Screen ID: {user.screen_id}
                                 Profile: {user.profile}\n''',
-                'author': {'name': user.screen_id,
-                           'icon_url': user.image},
+                'author': {'name': user.screen_id},
                 'thumbnail': {'url': user.image}
             }
-            embeds.append(Embed.from_dict(embed_dict))
-        await webhook.send(embeds=embeds)
+            await ctx.send(embed=Embed.from_dict(embed_dict))
 
     @tc.command()
-    async def sub(self, ctx, user_id: str):
+    async def add(self, ctx, user_id: str, channel_name: str):
         """
-        Subscribes the text channel to the provided twitcasting user id.
-            Usage: z!tc sub <twitcasting-user-id>
+        Adds subscription of the Twitcasting user to the provided text channel.
+            Usage: z!tc add <twitcasting-user-id> #<channel-name>
         """
-        channel_id = f'{ctx.guild.id}:{ctx.channel.id}'
-        res = self.db.get_subs_by_channel(channel_id=channel_id)
-        if not res:
-            await ctx.send("""You have not setup this channel for creating webhooks! 
-                    Run ```z!tc setup <name-of-webhook>``` to create a webhook for this channel.""")
-            return
-        webhook_id = res[0].webhook_id
-        users = self.twitcasting.search_users(words=user_id, limit=1)
-        assert(users[0].id == user_id)
-        self.twitcasting.register_webhook(user_id=user_id)
-        self.db.add_sub(Subscription(channel_id, webhook_id, user_id, users[0].screen_id))
-        await ctx.send(content=f"Added {users[0].screen_id} ({user_id}) to list of webhooks!")
-        self.db.commit()
+        channel_id = self._get_channel_id_from_name(channel_name)
+        if not channel_id:
+            await ctx.send(f'Cannot find {channel_name} in {ctx.guild.name}')
+        else:
+            users = self.twitcasting.search_users(words=user_id, limit=1)
+            if users[0].id != user_id:
+                await ctx.send(f'Cannot find {user_id} on the Twitcasting platform. Enter a valid ID.')
+                return
+            if self.db.get_sub(channel_id, user_id):
+                await ctx.send(content=f"Already subscribed to {users[0].screen_id} ({user_id}) in {channel_name}.")
+                return
+
+            guild_id = ctx.guild.id
+            self.twitcasting.register_webhook(user_id=user_id)
+            self.db.add_sub(Subscription(channel_id, guild_id, user_id, users[0].screen_id))
+            await ctx.send(content=f"Subscribed to {users[0].screen_id} ({user_id}) in {channel_name}.")
+            self.db.commit()
 
     @tc.command()
-    async def list(self, ctx):
+    async def list(self, ctx, channel_name: str = None):
         """
-        Lists all twitcasting users that this text channel has subscribed to.
-            Usage: z!tc list
+        Lists all Twitcasting users that this guild or text channel has subscribed to.
+            Usage: z!tc list #<channel-name>(optional)
         """
-        channel_id = f'{ctx.guild.id}:{ctx.channel.id}'
-        users = self.db.get_subs_by_channel(channel_id=channel_id)
+        if channel_name:
+            channel_id = self._get_channel_id_from_name(channel_name)
+            if not channel_id:
+                await ctx.send(f'Cannot find {channel_name} in {ctx.guild.name}')
+                return
+            users = self.db.get_subs_by_channel(channel_id=channel_id)
+        else:
+            users = self.db.get_subs_by_guild(ctx.guild.id)
         user_embed = Embed(title='Registered Users')
         for user in users:
-            if user.twitcast_user_id:
-                user_embed.add_field(name=user.twitcast_name,
-                                     value=f'ID: {user.twitcast_user_id}',
-                                     inline=False)
+            user_embed.add_field(name=user.twitcast_name,
+                                 value=f"""ID: {user.twitcast_user_id}
+                                        Channel: <#{user.channel_id}>""",
+                                 inline=False)
         await ctx.send(embed=user_embed)
 
     @tc.command()
-    async def remove(self, ctx, user_id: str):
+    async def remove(self, ctx, user_id: str, channel_name: str):
         """
-        Removes subscription to the provided twitcasting user id.
-            Usage: z!tc remove <twitcasting-user-id>
+        Removes subscription of the Twitcasting user from the text channel.
+            Usage: z!tc remove <twitcasting-user-id> #<channel-name>
         """
-        channel_id = f'{ctx.guild.id}:{ctx.channel.id}'
-        self.db.remove_sub_from_channel_by_user_id(channel_id=channel_id, twitcast_user_id=user_id)
+        channel_id = self._get_channel_id_from_name(channel_name)
+        if not channel_id:
+            await ctx.send(f'Cannot find {channel_name} in {ctx.guild.name}')
+            return
+
+        sub = self.db.get_sub(channel_id=channel_id, twitcast_user_id=user_id)
+        if not sub:
+            await ctx.send(f"Cannot find user {user_id} in subscription list for {channel_name}.")
+            return
+
+        user_name = sub.twitcast_name
+        self.db.remove_sub(sub)
         if self.db.count_subs_by_user_id(twitcast_user_id=user_id) == 0:
             self.twitcasting.remove_webhook(user_id=user_id)
-        await ctx.send(f"Deleted user {user_id} from list of webhooks.")
+        await ctx.send(f"Unsubscribed from {user_name} ({user_id}) in {channel_name}.")
         self.db.commit()
 
     @tc.command()
-    async def rename(self, ctx, webhook_name: str):
+    async def clear(self, ctx, channel_name: str):
         """
-        Migrates subscriptions to a new webhook with the provided name. Deletes the previous webhook.
-            Usage: z!tc rename <new-webhook-name>
+        Deletes any subscriptions in the text channel.
+            Usage: z!tc clear #<channel-name>
         """
-        channel_id = f'{ctx.guild.id}:{ctx.channel.id}'
+        channel_id = self._get_channel_id_from_name(channel_name)
+        if not channel_id:
+            await ctx.send(f'Cannot find {channel_name} in {ctx.guild.name}')
+            return
         res = self.db.get_subs_by_channel(channel_id=channel_id)
         if res:
-            webhook_id = res[0].webhook_id
-            try:
-                webhook = await self.bot.fetch_webhook(webhook_id)
-                await webhook.delete()
-            except NotFound:
-                self.logger.warning("Could not find and delete previously stored webhook with id %s", webhook_id)
-            new_webhook = await ctx.channel.create_webhook(name=webhook_name)
-            self.db.update_webhook_id_of_channel(channel_id=channel_id, webhook_id=new_webhook.id)
-            await ctx.send(f"Updated webhook with name {webhook_name}.")
+            self.db.remove_all_subs_from_channel(channel_id=channel_id)
+            await ctx.send(f"Cleared {channel_name} of twitcasting subscriptions.")
             self.db.commit()
         else:
-            await ctx.send(f"""Text channel has not been setup with a webhook.
-                            Please run z!tc setup <name-of-webhook> to start using the z!tc bot.""")
-
-    @tc.command()
-    async def clear(self, ctx):
-        """
-        Clears the text channel of the webhook created by the twitcasting bot. Deletes any subscriptions added in this text channel.
-            Usage: z!tc clear
-        """
-        channel_id = f'{ctx.guild.id}:{ctx.channel.id}'
-        res = self.db.get_subs_by_channel(channel_id=channel_id)
-        if res:
-            webhook_id = res[0].webhook_id
-            try:
-                self.db.remove_all_subs_from_channel(channel_id=channel_id)
-                webhook = await self.bot.fetch_webhook(webhook_id)
-                await webhook.delete()
-                await ctx.send(f"""Cleared text channel of twitcasting subscriptions and webhook.""")
-                self.db.commit()
-            except NotFound:
-                self.logger.warning("Could not find and delete previously stored webhook with id %s", webhook_id)
-        else:
-            await ctx.send(f"""Text channel has not been setup with a webhook.
-                            Could not clear the text channel of any bot artifacts (if any).""")
+            await ctx.send(f"No subs had been added to {channel_name}. There is nothing to clear.")
 
     @tc.command(hidden=True)
     async def update(self, ctx):
         """
         Dev command used to update names of locally stored Twitcasting users
         """
-        channel_id = f'{ctx.guild.id}:{ctx.channel.id}'
-        users = self.db.get_subs_by_channel(channel_id=channel_id)
+        users = self.db.get_subs_by_channel(channel_id=ctx.channel.id)
         for user in users:
             if user.twitcast_user_id:
                 new_user_info = self.twitcasting.search_users(words=user.twitcast_user_id, limit=1)
-                self.db.update_name_of_twitcast_user(twitcast_user_id=user.twitcast_user_id, twitcast_name=new_user_info[0].screen_id)
+                self.db.update_name_of_twitcast_user(twitcast_user_id=user.twitcast_user_id,
+                                                     twitcast_name=new_user_info[0].screen_id)
         self.db.commit()
 
     async def broadcast(self, request):
@@ -215,8 +180,17 @@ class Twitcasting(commands.Cog):
             'thumbnail': {'url': user.image}
         }
         embed = Embed.from_dict(embed_dict)
-        for row in res:
-            webhook_id = row.webhook_id
-            webhook = await self.bot.fetch_webhook(webhook_id=webhook_id)
-            await webhook.send(embed=embed, avatar_url=user.image)
+        for sub in res:
+            channel = self.bot.get_channel(channel_id=int(sub.channel_id))
+            await channel.send(embed=embed)
         return web.Response(status=200)
+
+    def _get_channel_id_from_name(self, channel_name: str):
+        channel_id = channel_name.strip('<>#')
+        try:
+            if self.bot.get_channel(int(channel_id)):
+                return channel_id
+            else:
+                return None
+        except ValueError:
+            return None
