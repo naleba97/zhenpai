@@ -56,4 +56,4 @@ jobs:
         --command="sudo docker stop $DOCKER_CONTAINER_NAME; \
         sudo docker system prune -af; \
         sudo docker load -i $DOCKER_TAR_NAME; \
-        sudo docker run -it -d --restart=always --name=$DOCKER_CONTAINER_NAME -v /home/data/images:/opt/app/images -v /home/data/db:/opt/app/db $DOCKER_IMAGE_NAME;"
+        sudo docker run -it -d -p 80:8080 --restart=always --name=$DOCKER_CONTAINER_NAME -v /home/data/images:/opt/app/images -v /home/data/db:/opt/app/db $DOCKER_IMAGE_NAME;"

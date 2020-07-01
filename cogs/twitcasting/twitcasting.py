@@ -181,8 +181,8 @@ class Twitcasting(commands.Cog):
         }
         embed = Embed.from_dict(embed_dict)
         for sub in res:
-            channel = self.bot.get_channel(channel_id=int(sub.channel_id))
-            await channel.send(embed=embed)
+            channel = self.bot.get_channel(int(sub.channel_id))
+            await channel.send(f'{message} @here', embed=embed)
         return web.Response(status=200)
 
     def _get_channel_id_from_name(self, channel_name: str):
