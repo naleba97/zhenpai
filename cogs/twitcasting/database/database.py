@@ -1,5 +1,6 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 import os
 import logging
@@ -19,8 +20,8 @@ class TwitcastDatabase(_DatabaseSubscriptions):
 
         self.engine = create_engine(f'sqlite:///{constants.DB_PATH}')
 
-        Session = sessionmaker(bind=self.engine)
-        self.session = Session()
+        self.SessionFactory = sessionmaker(bind=self.engine)
+        self.session = self.SessionFactory()
 
         Base.metadata.create_all(self.engine)
 
@@ -31,7 +32,11 @@ class TwitcastDatabase(_DatabaseSubscriptions):
         Commits any queued changes to the database.
         :return:
         """
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            raise
 
     def close(self):
         """
