@@ -7,7 +7,7 @@ import os
 
 from .database import TwitcastDatabase, Subscription
 from .pytwitcast import TwitcastAPI
-from . import config, constants
+from . import constants
 
 
 class Twitcasting(commands.Cog):
@@ -25,21 +25,15 @@ class Twitcasting(commands.Cog):
         self.db = TwitcastDatabase()
 
     def init_API(self):
-        if os.environ.get(constants.TWITCAST_CLIENT_ID):
-            client_id = os.environ[constants.TWITCAST_CLIENT_ID]
-        else:
+        if os.path.isfile('config.py'):
+            from . import config
             client_id = config.TWITCAST_CLIENT_ID
-
-        if os.environ.get(constants.TWITCAST_CLIENT_SECRET):
-            client_secret = os.environ[constants.TWITCAST_CLIENT_SECRET]
-        else:
             client_secret = config.TWITCAST_CLIENT_SECRET
-
-        if os.environ.get(constants.TWITCAST_ACCESS_TOKEN):
-            access_token = os.environ[constants.TWITCAST_ACCESS_TOKEN]
-        else:
             access_token = config.TWITCAST_ACCESS_TOKEN
-
+        else:
+            client_id = os.environ.get(constants.TWITCAST_CLIENT_ID)
+            client_secret = os.environ.get(constants.TWITCAST_CLIENT_SECRET)
+            access_token = os.environ.get(constants.TWITCAST_ACCESS_TOKEN)
         self.twitcasting = TwitcastAPI(client_id=client_id, client_secret=client_secret, access_token=access_token)
 
     @commands.group()
@@ -142,7 +136,8 @@ class Twitcasting(commands.Cog):
         """
         channel_id = f'{ctx.guild.id}:{ctx.channel.id}'
         self.db.remove_sub_from_channel_by_user_id(channel_id=channel_id, twitcast_user_id=user_id)
-        self.twitcasting.remove_webhook(user_id=user_id)
+        if self.db.count_subs_by_user_id(twitcast_user_id=user_id) == 0:
+            self.twitcasting.remove_webhook(user_id=user_id)
         await ctx.send(f"Deleted user {user_id} from list of webhooks.")
         self.db.commit()
 
@@ -163,7 +158,7 @@ class Twitcasting(commands.Cog):
                 self.logger.warning("Could not find and delete previously stored webhook with id %s", webhook_id)
             new_webhook = await ctx.channel.create_webhook(name=webhook_name)
             self.db.update_webhook_id_of_channel(channel_id=channel_id, webhook_id=new_webhook.id)
-            await ctx.send(f"""Updated webhook with name {webhook_name}.""")
+            await ctx.send(f"Updated webhook with name {webhook_name}.")
             self.db.commit()
         else:
             await ctx.send(f"""Text channel has not been setup with a webhook.

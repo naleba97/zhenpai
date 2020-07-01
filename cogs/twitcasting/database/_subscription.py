@@ -30,12 +30,22 @@ class _DatabaseSubscriptions:
     def get_subs_by_user_id(self, twitcast_user_id: str) -> List[Subscription]:
         """
         Retrieves all subscriptions to a particular Twitcasting user.
-        :param twitcast_user_id: the ID of the Twitcasting user
-        :return: list of Subscriptions records associated with a Twitcasting user
+        :param twitcast_user_id: the ID of the Twitcasting user.
+        :return: list of Subscriptions records associated with a Twitcasting user.
         """
         return self.session.query(Subscription)\
             .filter(Subscription.twitcast_user_id == twitcast_user_id)\
             .all()
+
+    def count_subs_by_user_id(self, twitcast_user_id: str) -> int:
+        """
+        Counts the number of text channels that have subscribed to a Twitcasting user.
+        :param twitcast_user_id: the ID of the Twitcasting user.
+        :return: the number of subscribed text channels.
+        """
+        return self.session.query(Subscription) \
+            .filter(Subscription.twitcast_user_id == twitcast_user_id) \
+            .count()
 
     def remove_sub_from_channel_by_user_id(self, channel_id: str, twitcast_user_id: str):
         """
