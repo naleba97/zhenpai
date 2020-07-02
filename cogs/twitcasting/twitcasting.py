@@ -45,13 +45,21 @@ class Twitcasting(commands.Cog):
                     help_text += f'{command}: {command.help}\n'
             await ctx.send(f'```{help_text}```')
 
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx, error):
+        self.logger.warning('%s - %s', ctx.message.content, error)
+        await ctx.send(f"{error}\nType `z!tc help` for usage details.")
+
     @tc.command()
-    async def search(self, ctx, query: str):
+    async def search(self, ctx, *args):
         """
         Searches Twitcasting for up to three users that closely matches the provided query.
             Usage: z!tc search <arg1> <arg2> ...
         """
-        users = self.twitcasting.search_users(words=query, limit=3)
+        if len(args) == 0:
+            await ctx.send("Send at least one word in the search query.")
+            return
+        users = self.twitcasting.search_users(words=args, limit=3)
         for user in users:
             embed_dict = {
                 'title': user.name,
@@ -65,33 +73,39 @@ class Twitcasting(commands.Cog):
             await ctx.send(embed=Embed.from_dict(embed_dict))
 
     @tc.command()
-    async def add(self, ctx, user_id: str, channel_name: str):
+    async def add(self, ctx, twitcast_user_id: str, channel_name: str = None):
         """
-        Adds subscription of the Twitcasting user to the provided text channel.
-            Usage: z!tc add <twitcasting-user-id> #<channel-name>
+        Adds subscription of the Twitcasting user to the provided text channel. If #<channel-name> is left blank,
+        then the channel in which the command was sent is used instead.
+            Usage: z!tc add <twitcasting-user-id> #<channel-name>(optional)
         """
-        channel_id = self._get_channel_id_from_name(channel_name)
-        if not channel_id:
-            await ctx.send(f'Cannot find {channel_name} in {ctx.guild.name}')
+        if channel_name:
+            channel_id = self._get_channel_id_from_name(channel_name)
+            if not channel_id:
+                await ctx.send(f'Cannot find {channel_name} in {ctx.guild.name}')
+                return
         else:
-            users = self.twitcasting.search_users(words=user_id, limit=1)
-            if users[0].id != user_id:
-                await ctx.send(f'Cannot find {user_id} on the Twitcasting platform. Enter a valid ID.')
-                return
-            if self.db.get_sub(channel_id, user_id):
-                await ctx.send(content=f"Already subscribed to {users[0].screen_id} ({user_id}) in {channel_name}.")
-                return
+            channel_id = ctx.channel.id
 
-            guild_id = ctx.guild.id
-            self.twitcasting.register_webhook(user_id=user_id)
-            self.db.add_sub(Subscription(channel_id, guild_id, user_id, users[0].screen_id))
-            await ctx.send(content=f"Subscribed to {users[0].screen_id} ({user_id}) in {channel_name}.")
-            self.db.commit()
+        users = self.twitcasting.search_users(words=twitcast_user_id, limit=1)
+        if users[0].id != twitcast_user_id:
+            await ctx.send(f'Cannot find {twitcast_user_id} on the Twitcasting platform. Enter a valid ID.')
+            return
+        if self.db.get_sub(channel_id, twitcast_user_id):
+            await ctx.send(content=f"Already subscribed to {users[0].screen_id} ({twitcast_user_id}) in {channel_name}.")
+            return
+
+        guild_id = ctx.guild.id
+        self.twitcasting.register_webhook(user_id=twitcast_user_id)
+        self.db.add_sub(Subscription(channel_id, guild_id, twitcast_user_id, users[0].screen_id))
+        await ctx.send(content=f"Subscribed to {users[0].screen_id} ({twitcast_user_id}) in {channel_name}.")
+        self.db.commit()
 
     @tc.command()
     async def list(self, ctx, channel_name: str = None):
         """
-        Lists all Twitcasting users that this guild or text channel has subscribed to.
+        Lists all Twitcasting users that this guild or text channel has subscribed to. If #<channel-name> is left blank,
+        then the command will list subscriptions for the entire guild/server instead.
             Usage: z!tc list #<channel-name>(optional)
         """
         if channel_name:
@@ -102,35 +116,41 @@ class Twitcasting(commands.Cog):
             users = self.db.get_subs_by_channel(channel_id=channel_id)
         else:
             users = self.db.get_subs_by_guild(ctx.guild.id)
+
         user_embed = Embed(title='Registered Users')
         for user in users:
-            user_embed.add_field(name=user.twitcast_name,
-                                 value=f"""ID: {user.twitcast_user_id}
+            user_embed.add_field(name='====================',
+                                 value=f"""Name: [{user.twitcast_name}](https://twitcasting.tv/{user.twitcast_name})
+                                        ID: {user.twitcast_user_id}
                                         Channel: <#{user.channel_id}>""",
                                  inline=False)
         await ctx.send(embed=user_embed)
 
     @tc.command()
-    async def remove(self, ctx, user_id: str, channel_name: str):
+    async def remove(self, ctx, twitcast_user_id: str, channel_name: str = None):
         """
-        Removes subscription of the Twitcasting user from the text channel.
-            Usage: z!tc remove <twitcasting-user-id> #<channel-name>
+        Removes subscription of the Twitcasting user from the text channel. If #<channel-name> is left blank,
+        then the channel in which the command was sent is used instead.
+            Usage: z!tc remove <twitcasting-user-id> #<channel-name>(optional)
         """
-        channel_id = self._get_channel_id_from_name(channel_name)
-        if not channel_id:
-            await ctx.send(f'Cannot find {channel_name} in {ctx.guild.name}')
-            return
+        if channel_name:
+            channel_id = self._get_channel_id_from_name(channel_name)
+            if not channel_id:
+                await ctx.send(f'Cannot find {channel_name} in {ctx.guild.name}')
+                return
+        else:
+            channel_id = ctx.channel.id
 
-        sub = self.db.get_sub(channel_id=channel_id, twitcast_user_id=user_id)
+        sub = self.db.get_sub(channel_id=channel_id, twitcast_user_id=twitcast_user_id)
         if not sub:
-            await ctx.send(f"Cannot find user {user_id} in subscription list for {channel_name}.")
+            await ctx.send(f"Cannot find user {twitcast_user_id} in subscription list for {channel_name}.")
             return
 
         user_name = sub.twitcast_name
         self.db.remove_sub(sub)
-        if self.db.count_subs_by_user_id(twitcast_user_id=user_id) == 0:
-            self.twitcasting.remove_webhook(user_id=user_id)
-        await ctx.send(f"Unsubscribed from {user_name} ({user_id}) in {channel_name}.")
+        if self.db.count_subs_by_user_id(twitcast_user_id=twitcast_user_id) == 0:
+            self.twitcasting.remove_webhook(user_id=twitcast_user_id)
+        await ctx.send(f"Unsubscribed from {user_name} ({twitcast_user_id}) in {channel_name}.")
         self.db.commit()
 
     @tc.command()
@@ -143,9 +163,12 @@ class Twitcasting(commands.Cog):
         if not channel_id:
             await ctx.send(f'Cannot find {channel_name} in {ctx.guild.name}')
             return
-        res = self.db.get_subs_by_channel(channel_id=channel_id)
-        if res:
+        subs = self.db.get_subs_by_channel(channel_id=channel_id)
+        if subs:
             self.db.remove_all_subs_from_channel(channel_id=channel_id)
+            for sub in subs:
+                if self.db.count_subs_by_user_id(twitcast_user_id=sub.twitcast_user_id) == 0:
+                    self.twitcasting.remove_webhook(user_id=sub.twitcast_user_id)
             await ctx.send(f"Cleared {channel_name} of twitcasting subscriptions.")
             self.db.commit()
         else:

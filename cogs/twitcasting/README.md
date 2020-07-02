@@ -16,12 +16,15 @@ the subscribed text channels.
 To use this cog, each subcommand has to preceded by `z!tc`.
 * `z!tc search <arg1> <arg2> ...`: Searches Twitcasting for up to three users that
 closely matches the provided query.
-* `z!tc add <twitcasting-user-id> #<channel-name>`: Adds subscription of the
-Twitcasting user to the provided text channel.
+* `z!tc add <twitcasting-user-id> #<channel-name>(optional)`: Adds subscription of the
+Twitcasting user to the provided text channel. If #<channel-name> is left blank,
+then the channel in which the command was sent is used instead.
 * `z!tc list #<channel-name>(optional)`: Lists all Twitcasting users that this
-guild or text channel has subscribed to.
-* `z!tc remove <twitcasting-user-id> #<channel-name>`: Removes subscription of the
-Twitcasting user from the text channel.
+guild or text channel has subscribed to. If #<channel-name> is left blank,
+then the command will list subscriptions for the entire guild/server instead.
+* `z!tc remove <twitcasting-user-id> #<channel-name(optional)`: Removes subscription of the
+Twitcasting user from the text channel. If #<channel-name> is left blank, then the 
+channel in which the command was sent is used instead.
 * `z!tc clear #<channel-name>`: Deletes any subscriptions in the text channel.
 
 #### Maintenance

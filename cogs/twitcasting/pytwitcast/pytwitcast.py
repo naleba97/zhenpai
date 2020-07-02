@@ -3,6 +3,7 @@ from enum import Enum
 from typing import List
 from typing import Dict
 from typing import Union
+from typing import Tuple
 import base64
 
 from .user import User
@@ -85,7 +86,7 @@ class TwitcastAPI:
 
         return self._api_call('DELETE', url, payload, json_data, auth, kwargs)
 
-    def search_users(self, words: Union[str, List[str]], limit: int = 10, lang: str = 'ja') -> List[User]:
+    def search_users(self, words: Union[str, Tuple[str]], limit: int = 10, lang: str = 'ja') -> List[User]:
         """
         Search users on Twitcasting API by using the provided list of words as the query parameter.
         :param words: search terms.
@@ -93,7 +94,7 @@ class TwitcastAPI:
         :param lang: the language of the response.
         :return:
         """
-        if isinstance(words, list):
+        if isinstance(words, tuple):
             w = ' '.join(words) if len(words) > 1 else words[0]
         else:
             w = words
