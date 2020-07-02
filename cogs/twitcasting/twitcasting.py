@@ -45,8 +45,8 @@ class Twitcasting(commands.Cog):
                     help_text += f'{command}: {command.help}\n'
             await ctx.send(f'```{help_text}```')
 
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx, error):
+    @tc.error
+    async def tc_error_handler(self, ctx, error):
         self.logger.warning('%s - %s', ctx.message.content, error)
         await ctx.send(f"{error}\nType `z!tc help` for usage details.")
 

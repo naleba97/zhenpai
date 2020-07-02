@@ -14,6 +14,19 @@ extensions = [
 
 
 @bot.event
+async def on_command_error(ctx, error):
+    if hasattr(ctx.command, "on_error"):
+        return
+
+    if ctx.cog:
+        if commands.Cog._get_overridden_method(ctx.cog.cog_command_error) is not None:
+            return
+
+    logger.warning('%s - %s', ctx.message.content, error)
+    await ctx.send(f"{error}\nType `z!help` for usage details.")
+
+
+@bot.event
 async def on_ready():
     print('Logged in as: ', bot.user)
     print('Discord.py version: ', discord.__version__)
