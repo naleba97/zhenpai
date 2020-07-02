@@ -92,6 +92,7 @@ class Tagging(commands.Cog):
         for tag_name in args:
             key_name = taggingutils.create_redis_key(ctx.guild.id, tag_name)
             self.lookup.delete(key_name)
+            await ctx.send(f'Deleted {tag_name}.')
     
     @tag.command()
     async def debug(self, ctx):
