@@ -5,3 +5,4 @@ images/
 db/
 .idea/
 *.db
+*.pyc

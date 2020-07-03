@@ -13,7 +13,6 @@ from . import constants
 class Twitcasting(commands.Cog):
     """
     The Twitcasting cog allows users to search and follow users streaming on the Twitcasting platform (twitcasting.tv).
-    The high-level workflow of the cog is that it creates and records a Discord webhook
 
     TODO: Add admin-only privileges for subcommands (setup, clear)
     """

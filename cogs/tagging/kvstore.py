@@ -64,15 +64,17 @@ class TaggingItem(object):
         }
         return result
 
-    def from_dict(self, data):
+    @classmethod
+    def from_dict(cls, data):
+        item = cls()
         for attr in ('name', 'url', 'local_url', 'creator_id'):
             try:
                 value = data[attr]
             except KeyError:
                 continue
             else:
-                setattr(self, '_' + attr, value)
-        return self
+                setattr(item, '_' + attr, value)
+        return item
 
 
 class BaseKeyValueStore(metaclass=abc.ABCMeta):
@@ -113,22 +115,28 @@ class DictKeyValueStore(BaseKeyValueStore):
         self.load()
 
     def __getitem__(self, key: str) -> TaggingItem:
-        server_id, tag_name = taggingutils.get_values_from_redis_key(key)
+        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
         return self.kvstore[server_id][tag_name]
 
     def __setitem__(self, key: str, value: TaggingItem):
-        server_id, tag_name = taggingutils.get_values_from_redis_key(key)
+        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
         if server_id not in self.kvstore:
             self.kvstore[server_id] = {}
         self.kvstore[server_id][tag_name] = value
 
     def __contains__(self, key: str):
-        server_id, tag_name = taggingutils.get_values_from_redis_key(key)
+        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
         return tag_name in self.kvstore[server_id]
 
+    def __iter__(self):
+        return iter(self.kvstore)
+
     def get(self, key: str) -> TaggingItem:
-        server_id, tag_name = taggingutils.get_values_from_redis_key(key)
+        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
         return self.kvstore[server_id][tag_name]
+
+    def get_tags(self, server_id: str) -> Dict[str, TaggingItem]:
+        return self.kvstore[server_id]
 
     def get_paged(self, server_id: str, cursor: int = 0):
         if server_id not in self.kvstore:
@@ -136,13 +144,13 @@ class DictKeyValueStore(BaseKeyValueStore):
         return self.kvstore[server_id]
 
     def put(self, key: str, value: TaggingItem):
-        server_id, tag_name = taggingutils.get_values_from_redis_key(key)
+        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
         if server_id not in self.kvstore:
             self.kvstore[server_id] = {}
         self.kvstore[server_id][tag_name] = value
 
     def delete(self, key: str) -> bool:
-        server_id, tag_name = taggingutils.get_values_from_redis_key(key)
+        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
         try:
             self.kvstore[server_id].pop(tag_name)
         except KeyError:
@@ -151,7 +159,7 @@ class DictKeyValueStore(BaseKeyValueStore):
 
     def load(self):
         try:
-            with open(path.join(constants.DB_PATH, constants.DB_FILENAME), 'rb') as handle:
+            with open(constants.KV_PATH, 'rb') as handle:
                 saved_kvstore = pickle.load(handle)
                 self.from_dict(saved_kvstore)
         except (IOError, OSError, EOFError) as e:
@@ -159,7 +167,7 @@ class DictKeyValueStore(BaseKeyValueStore):
 
     def save(self):
         try:
-            with open(path.join(constants.DB_PATH, constants.DB_FILENAME), 'wb') as handle:
+            with open(constants.KV_PATH, 'wb') as handle:
                 pickle.dump(self.to_dict(), handle)
         except (IOError, OSError) as e:
             self.logger.error("Could not save current session's tags to disk. %s", e)
@@ -176,7 +184,7 @@ class DictKeyValueStore(BaseKeyValueStore):
         for server, tags in dict_.items():
             self.kvstore[server] = {}
             for tag_name, v in tags.items():
-                self.kvstore[server][tag_name] = TaggingItem().from_dict(v)
+                self.kvstore[server][tag_name] = TaggingItem.from_dict(v)
 
 
 class RedisKeyValueStore(BaseKeyValueStore):
@@ -185,7 +193,7 @@ class RedisKeyValueStore(BaseKeyValueStore):
 
     def __getitem__(self, key: str) -> TaggingItem:
         values = self.conn.hgetall(key)
-        return TaggingItem().from_dict(values)
+        return TaggingItem.from_dict(values)
 
     def __setitem__(self, key: str, value: TaggingItem):
         self.conn.hset(key, mapping=value.to_dict())
@@ -195,7 +203,7 @@ class RedisKeyValueStore(BaseKeyValueStore):
 
     def get(self, key: str) -> TaggingItem:
         values = self.conn.hgetall(key)
-        return TaggingItem().from_dict(values)
+        return TaggingItem.from_dict(values)
 
     def get_paged(self, server_id: str, count=10, cursor=0) -> Tuple[int, List]:
         return self.conn.scan(cursor=cursor, match="*{0}*".format(server_id), count=count)
