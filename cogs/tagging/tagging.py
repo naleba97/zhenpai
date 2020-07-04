@@ -1,19 +1,20 @@
 import atexit
 import logging
 import os
+import requests
 from pathlib import Path
+
 from discord import File
 from discord.ext import commands
 from discord.embeds import Embed
 
-from .kvstore import *
-from .database import TaggingDatabase
+from .kvstore import DictKeyValueStore, RedisKeyValueStore, TaggingItem
+from .database import TaggingDatabase, Tag
 from . import constants
 from . import taggingutils
 
 """
 WIP: 
-Figure out command groups
 Figure out user information
 Figure out global vs server tags
 """
@@ -34,6 +35,7 @@ class Tagging(commands.Cog):
         self.bot = bot
         self.lookup = DictKeyValueStore()
         # self.lookup = RedisKeyValueStore(ip='localhost', port=6379)
+        self.db = TaggingDatabase()
         self.usage = None  # TODO
         atexit.register(self.cleanup)
 
@@ -59,27 +61,62 @@ class Tagging(commands.Cog):
                    "z!create foo https://path.to/bar.png"
         """
         attachments = ctx.message.attachments
-        if tag_name and attachments:
-            attachment = attachments[0]
+        if tag_name:
             command_name = taggingutils.sanitize(tag_name)
             guild_id = ctx.guild.id
-            key = taggingutils.create_kv_key(guild_id, command_name)
-            server_path = path.join(constants.IMAGES_FOLDER_NAME, str(guild_id))
+            server_path = os.path.join(constants.IMAGES_FOLDER_NAME, str(guild_id))
             Path(server_path).mkdir(parents=True, exist_ok=True)
-            local_url = path.join(server_path, attachment.filename)
-            await attachment.save(local_url)
-            self.logger.info("Saved image to %s", local_url)
-            self.lookup[key] = TaggingItem(name=command_name,
-                                           url=attachment.url,
-                                           local_url=local_url,
-                                           creator_id=ctx.message.author.id)
-            self.lookup.save()
+            if attachments:
+                attachment = attachments[0]
+                local_url = os.path.join(server_path, attachment.filename)
+                await attachment.save(local_url)
+                self.logger.info("Saved image to %s", local_url)
+
+                tagging_item = TaggingItem(url=attachment.url,
+                                           local_url=local_url)
+                tag = Tag(guild_id=guild_id,
+                          tag=command_name,
+                          cdn_url=attachment.url,
+                          local_url=local_url,
+                          creator_id=ctx.message.author.id)
+
+                key = taggingutils.create_kv_key(guild_id, command_name)
+                self.lookup[key] = tagging_item
+                self.db.add_tag(tag)
+                self.db.commit()
+                self.lookup.save()
+            elif link:
+                filename = link.split('/')[-1].replace(" ", '_')
+                local_url = os.path.join(server_path, filename)
+
+                res = requests.get(link, stream=True)
+                if res.ok:
+                    with open(local_url, 'wb') as f:
+                        for chunk in res.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                f.flush()
+                                os.fsync(f.fileno())
+                    self.logger.info("Saved image to %s", local_url)
+                    tagging_item = TaggingItem(url=link,
+                                               local_url=local_url)
+                    tag = Tag(guild_id=guild_id,
+                              tag=command_name,
+                              cdn_url=link,
+                              local_url=local_url,
+                              creator_id=ctx.message.author.id)
+
+                    key = taggingutils.create_kv_key(guild_id, command_name)
+                    self.lookup[key] = tagging_item
+                    self.db.add_tag(tag)
+                    self.db.commit()
+                    self.lookup.save()
+                else:
+                    await ctx.send('Failed to download file from link.')
+
             await ctx.send(
                 content='Successfully created ' + command_name + ' linked to ' + self.lookup[key].local_url)
             self.logger.info('Successfully created %s linked to %s', command_name, self.lookup[key].local_url)
-        elif tag_name and link:
-            pass
-            # TODO: sanitize and check that the second argument is an URL.
         else:
             await ctx.send(f'```{ctx.command.help}```')
 
@@ -90,20 +127,11 @@ class Tagging(commands.Cog):
             Usage: "z!tag list"
         """
         embed = Embed(title='List of Registered Tags')
-        if isinstance(self.lookup, DictKeyValueStore):
-            for k, v in self.lookup.get_paged(server_id=str(ctx.guild.id)).items():
-                creator = self.bot.get_user(int(v.creator_id))
-                embed = embed.add_field(name='--------------------------------',
-                                        value=f"[{v.name}]({v.url})\nBy: {creator.name}",
-                                        inline=False)
-        elif isinstance(self.lookup, RedisKeyValueStore):
-            cursor, keys = self.lookup.get_paged(server_id=ctx.guild.id)
-            for k in keys:
-                v = self.lookup[k]
-                creator = self.bot.get_user(int(v.creator_id))
-                embed = embed.add_field(name='--------------------------------',
-                                        value=f"[{v.name}]({v.url})\nBy: {creator.name}",
-                                        inline=False)
+        for tag in self.db.get_tags_by_guild_id(ctx.guild.id):
+            creator = self.bot.get_user(int(tag.creator_id))
+            embed = embed.add_field(name='--------------------------------',
+                                    value=f"[{tag.tag}]({tag.cdn_url})\nBy: {creator.name}",
+                                    inline=False)
         await ctx.send(embed=embed)
 
     @tag.command()
@@ -115,11 +143,14 @@ class Tagging(commands.Cog):
         for tag_name in args:
             key = taggingutils.create_kv_key(ctx.guild.id, tag_name)
             if self.lookup.delete(key):
+                tag = self.db.get_tag_by_guild_id_and_tag(ctx.guild.id, tag_name)
+                self.db.remove_tag(tag)
+                self.db.commit()
                 await ctx.send(f'Deleted tag: `{tag_name}`')
             else:
                 await ctx.send(f'Could not find tag: `{tag_name}`')
             self.lookup.save()
-    
+
     @tag.command(hidden=True)
     async def debug(self, ctx):
         """Used for debugging"""
@@ -127,7 +158,7 @@ class Tagging(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if not message.author.bot:
+        if not message.author.bot and not message.content.startswith('z!'):
             words = taggingutils.parse_message(message)
             for word in words:
                 word = taggingutils.sanitize(word)

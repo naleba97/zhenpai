@@ -14,11 +14,11 @@ class Tag(Base):
     unique_constraint = UniqueConstraint(guild_id, tag)
 
     def __init__(self,
-                 guild_id,
-                 tag,
-                 cdn_url,
-                 local_url,
-                 creator_id
+                 guild_id: str,
+                 tag: str,
+                 cdn_url: str,
+                 local_url: str,
+                 creator_id: str
     ):
         self.guild_id = guild_id
         self.tag = tag

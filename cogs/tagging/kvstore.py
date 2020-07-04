@@ -2,35 +2,22 @@ import abc
 import logging
 import pickle
 import redis
-from os import path
 from typing import Dict
 from typing import AnyStr
 from typing import List
 from typing import Tuple
 
 from . import constants
-from . import taggingutils
 
 
 class TaggingItem(object):
     """
-    Thing to be retrieved, can be an image file, a gif, a soundbite, 
+    Thing to be retrieved, can be an image file, a gif, a soundbite,
     a url with an embed preview, a youtube link, a text document, etc.
     """
-
-    def __init__(self, name: str = None, url: str = None, local_url: str = None, creator_id: int = None):
-        self._name = name
+    def __init__(self, url: str = None, local_url: str = None):
         self._url = url
         self._local_url = local_url
-        self._creator_id = creator_id
-
-    @property
-    def name(self):
-        return self._name
-
-    @name.setter
-    def name(self, value: str):
-        self._name = value
 
     @property
     def url(self):
@@ -48,14 +35,6 @@ class TaggingItem(object):
     def local_url(self, value):
         self._local_url = value
 
-    @property
-    def creator_id(self):
-        return self._creator_id
-
-    @creator_id.setter
-    def creator_id(self, value):
-        self._creator_id = value
-
     def to_dict(self):
         result = {
             key[1:]: getattr(self, key)
@@ -67,7 +46,7 @@ class TaggingItem(object):
     @classmethod
     def from_dict(cls, data):
         item = cls()
-        for attr in ('name', 'url', 'local_url', 'creator_id'):
+        for attr in ('url', 'local_url'):
             try:
                 value = data[attr]
             except KeyError:
@@ -110,52 +89,34 @@ class BaseKeyValueStore(metaclass=abc.ABCMeta):
 
 class DictKeyValueStore(BaseKeyValueStore):
     def __init__(self):
-        self.logger = logging.getLogger('zhenpai.tagging')
-        self.kvstore: Dict[str, Dict[str, TaggingItem]] = {}  # TODO: load from a pickle file, not sure when we save though
+        self.logger = logging.getLogger('zhenpai.tagging.kvstore')
+        self.kvstore: Dict[str, TaggingItem] = {}
         self.load()
 
     def __getitem__(self, key: str) -> TaggingItem:
-        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
-        return self.kvstore[server_id][tag_name]
+        return self.kvstore[key]
 
     def __setitem__(self, key: str, value: TaggingItem):
-        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
-        if server_id not in self.kvstore:
-            self.kvstore[server_id] = {}
-        self.kvstore[server_id][tag_name] = value
+        self.kvstore[key] = value
 
     def __contains__(self, key: str):
-        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
-        return tag_name in self.kvstore[server_id]
+        return key in self.kvstore
 
     def __iter__(self):
         return iter(self.kvstore)
 
     def get(self, key: str) -> TaggingItem:
-        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
-        return self.kvstore[server_id][tag_name]
-
-    def get_tags(self, server_id: str) -> Dict[str, TaggingItem]:
-        return self.kvstore[server_id]
-
-    def get_paged(self, server_id: str, cursor: int = 0):
-        if server_id not in self.kvstore:
-            return {}
-        return self.kvstore[server_id]
+        return self.kvstore[key]
 
     def put(self, key: str, value: TaggingItem):
-        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
-        if server_id not in self.kvstore:
-            self.kvstore[server_id] = {}
-        self.kvstore[server_id][tag_name] = value
+        self.kvstore[key] = value
 
     def delete(self, key: str) -> bool:
-        server_id, tag_name = taggingutils.get_values_from_kv_key(key)
-        try:
-            self.kvstore[server_id].pop(tag_name)
-        except KeyError:
+        if key in self.kvstore:
+            self.kvstore.pop(key)
+            return True
+        else:
             return False
-        return True
 
     def load(self):
         try:
@@ -174,17 +135,13 @@ class DictKeyValueStore(BaseKeyValueStore):
 
     def to_dict(self):
         dict_ = {}
-        for server, tags in self.kvstore.items():
-            dict_[server] = {}
-            for tag_name, v in tags.items():
-                dict_[server][tag_name] = v.to_dict()
+        for tag, tag_item in self.kvstore.items():
+                dict_[tag] = tag_item.to_dict()
         return dict_
 
     def from_dict(self, dict_):
-        for server, tags in dict_.items():
-            self.kvstore[server] = {}
-            for tag_name, v in tags.items():
-                self.kvstore[server][tag_name] = TaggingItem.from_dict(v)
+        for tag, tag_item in dict_.items():
+            self.kvstore[tag] = TaggingItem.from_dict(tag_item)
 
 
 class RedisKeyValueStore(BaseKeyValueStore):
@@ -206,7 +163,7 @@ class RedisKeyValueStore(BaseKeyValueStore):
         return TaggingItem.from_dict(values)
 
     def get_paged(self, server_id: str, count=10, cursor=0) -> Tuple[int, List]:
-        return self.conn.scan(cursor=cursor, match="*{0}*".format(server_id), count=count)
+        return self.conn.scan(cursor=cursor, match=f"*{server_id}*", count=count)
 
     def put(self, key: str, value: TaggingItem):
         self.conn.hset(key, mapping=value.to_dict())
