@@ -5,7 +5,8 @@ from discord import NotFound
 import logging
 import os
 
-from .database import TwitcastDatabase, Subscription
+from database import DB
+from database.twitcasting.subscription import Subscription
 from .pytwitcast import TwitcastAPI
 from . import constants
 
@@ -21,7 +22,7 @@ class Twitcasting(commands.Cog):
         self.bot = bot
         self.twitcasting = None
         self.init_api()
-        self.db = TwitcastDatabase()
+        self.db = DB
 
     def init_api(self):
         if os.path.isfile('config.py'):

@@ -8,8 +8,9 @@ from discord import File
 from discord.ext import commands
 from discord.embeds import Embed
 
+from database import DB
+from database.tagging.tag import Tag
 from .kvstore import DictKeyValueStore, RedisKeyValueStore, TaggingItem
-from .database import TaggingDatabase, Tag
 from . import constants
 from . import taggingutils
 
@@ -35,7 +36,7 @@ class Tagging(commands.Cog):
         self.bot = bot
         self.lookup = DictKeyValueStore()
         # self.lookup = RedisKeyValueStore(ip='localhost', port=6379)
-        self.db = TaggingDatabase()
+        self.db = DB
         self.usage = None  # TODO
         atexit.register(self.cleanup)
 
