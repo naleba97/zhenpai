@@ -1,16 +1,15 @@
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 import os
 
-Base = declarative_base()
+from . import Base
+from . import constants
+from database.tagging._tags import _DatabaseTags
+from database.twitcasting._subscription import _DatabaseSubscriptions
 
-from cogs.tagging import constants
-from ._tags import _DatabaseTags
 
-
-class TaggingDatabase(_DatabaseTags):
+class Database(_DatabaseTags, _DatabaseSubscriptions):
     def __init__(self):
         if not os.path.exists(constants.DB_FOLDER_NAME):
             os.makedirs(constants.DB_FOLDER_NAME)

@@ -1,4 +1,4 @@
-from .tagging import *
+from .tagging import Tagging
 
 
 def setup(bot):

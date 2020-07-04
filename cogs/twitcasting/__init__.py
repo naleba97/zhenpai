@@ -1,4 +1,4 @@
-from .twitcasting import *
+from .twitcasting import Twitcasting
 from ..webserver import app
 
 def setup(bot):
