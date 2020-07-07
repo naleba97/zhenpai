@@ -5,7 +5,7 @@ import os
 
 from . import Base
 from . import constants
-from database.tagging._tags import _DatabaseTags
+from database.tagging._tag import _DatabaseTags
 from database.twitcasting._subscription import _DatabaseSubscriptions
 
 

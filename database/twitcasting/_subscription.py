@@ -1,4 +1,8 @@
 from .subscription import Subscription
+from .twitcast_user import TwitcastUser
+from ..core.user import User
+from ..core.channel import Channel
+from ..core.guild import Guild
 from typing import List
 
 
