@@ -8,7 +8,7 @@ class User(Base):
 
     user_id = Column(Integer, primary_key=True)
 
-    subscriptions = relationship("Subscription", back_populates="user", cascade="delete")
+    subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete")
 
     def __init__(self,
                  user_id: int

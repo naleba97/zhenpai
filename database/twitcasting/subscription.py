@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, UniqueConstraint, ForeignKey
+from sqlalchemy import Column, Integer, String, UniqueConstraint, ForeignKey
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -7,11 +7,9 @@ class Subscription(Base):
     __tablename__ = 'subscriptions'
 
     user_id = Column(Integer, ForeignKey('users.user_id'), primary_key=True)
-    twitcast_user_id = Column(Integer, ForeignKey('twitcast_users.twitcast_user_id'), primary_key=True)
+    twitcast_user_id = Column(String, ForeignKey('twitcast_users.twitcast_user_id'), primary_key=True)
     channel_id = Column(Integer, ForeignKey('channels.channel_id'))
-    guild_id = Column(Integer, ForeignKey('guilds.guild_id'))
-
-    unique_constraint = UniqueConstraint(user_id, twitcast_user_id)
+    guild_id = Column(Integer, ForeignKey('guilds.guild_id'))\
 
     user = relationship("User", back_populates="subscriptions")
     twitcast_user = relationship("TwitcastUser", back_populates="subscribers")

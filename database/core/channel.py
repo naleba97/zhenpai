@@ -8,7 +8,7 @@ class Channel(Base):
 
     channel_id = Column(Integer, primary_key=True)
 
-    subscriptions = relationship("Subscription", back_populates="channel", cascade="delete")
+    subscriptions = relationship("Subscription", back_populates="channel", cascade="all, delete")
 
     def __init__(self,
                  channel_id: int

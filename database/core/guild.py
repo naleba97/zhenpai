@@ -8,7 +8,7 @@ class Guild(Base):
 
     guild_id = Column(Integer, primary_key=True)
 
-    subscriptions = relationship("Subscription", back_populates="guild", cascade="delete")
+    subscriptions = relationship("Subscription", back_populates="guild", cascade="all, delete")
 
     def __init__(self,
                  guild_id: int
