@@ -1,17 +1,14 @@
 from aiohttp import web
 from discord.ext import commands
 from discord import Embed
-from discord import NotFound
 import logging
 import os
 
-from database import DB
-from database.core.user import User
-from database.core.channel import Channel
-from database.core.guild import Guild
 from database.twitcasting.subscription import Subscription
-from .pytwitcast import TwitcastAPI
-from . import constants
+from cogs.notifications.twitcasting.pytwitcast import TwitcastAPI
+from cogs.notifications.twitcasting import constants
+
+logger = logging.getLogger('zhenpai.notifications.twitcasting')
 
 
 class Twitcasting(commands.Cog):
@@ -20,16 +17,13 @@ class Twitcasting(commands.Cog):
 
     TODO: Add admin-only privileges for subcommands (setup, clear)
     """
-    def __init__(self, bot):
-        self.logger = logging.getLogger('zhenpai.twitcasting')
-        self.bot = bot
+    def __init__(self):
         self.twitcasting = None
         self.init_api()
-        self.db = DB
 
     def init_api(self):
         if os.path.isfile('config.py'):
-            from . import config
+            from cogs.notifications.twitcasting import config
             client_id = config.TWITCAST_CLIENT_ID
             client_secret = config.TWITCAST_CLIENT_SECRET
             access_token = config.TWITCAST_ACCESS_TOKEN
@@ -40,7 +34,14 @@ class Twitcasting(commands.Cog):
         self.twitcasting = TwitcastAPI(client_id=client_id, client_secret=client_secret, access_token=access_token)
 
     @commands.group()
+    async def ntfy(self, ctx):
+        pass
+
+    @ntfy.group()
     async def tc(self, ctx):
+        """
+        Used to manage Twitcasting subscriptions.
+        """
         if ctx.invoked_subcommand is None:
             help_text = ""
             for command in self.walk_commands():
@@ -50,11 +51,11 @@ class Twitcasting(commands.Cog):
 
     @tc.error
     async def tc_error_handler(self, ctx, error):
-        self.logger.warning('%s - %s', ctx.message.content, error)
+        logger.warning('%s - %s', ctx.message.content, error)
         await ctx.send(f"{error}\nType `z!tc help` for usage details.")
 
-    @tc.command()
-    async def search(self, ctx, *args):
+    @tc.command(name='search')
+    async def tc_search(self, ctx, *args):
         """
         Searches Twitcasting for up to three users that closely matches the provided query.
             Usage: z!tc search <arg1> <arg2> ...
@@ -75,8 +76,8 @@ class Twitcasting(commands.Cog):
             }
             await ctx.send(embed=Embed.from_dict(embed_dict))
 
-    @tc.command()
-    async def add(self, ctx, twitcast_user_id: str, channel_name: str = None):
+    @tc.command(name='add')
+    async def tc_add(self, ctx, twitcast_user_id: str, channel_name: str = None):
         """
         Adds subscription of the Twitcasting user to the provided text channel. If #<channel-name> is left blank,
         then the channel in which the command was sent is used instead.
@@ -115,8 +116,8 @@ class Twitcasting(commands.Cog):
         await ctx.send(content=f"Subscribed to {twitcast_name} ({twitcast_user_id}) in {channel_name}.")
         self.db.commit()
 
-    @tc.command()
-    async def list(self, ctx, channel_name: str = None):
+    @tc.command(name='list')
+    async def tc_list(self, ctx, channel_name: str = None):
         """
         Lists all Twitcasting users that this guild or text channel has subscribed to. If #<channel-name> is left blank,
         then the command will list subscriptions for the entire guild/server instead.
@@ -142,8 +143,8 @@ class Twitcasting(commands.Cog):
                                         Channel: <#{sub.channel_id}>""")
         await ctx.send(embed=user_embed)
 
-    @tc.command()
-    async def remove(self, ctx, twitcast_user_id: str, channel_name: str = None):
+    @tc.command(name='remove')
+    async def tc_remove(self, ctx, twitcast_user_id: str, channel_name: str = None):
         """
         Removes subscription of the Twitcasting user from the text channel. If #<channel-name> is left blank,
         then the channel in which the command was sent is used instead.
@@ -171,8 +172,8 @@ class Twitcasting(commands.Cog):
         await ctx.send(f"Unsubscribed from {user_name} ({twitcast_user_id}) in {channel_name}.")
         self.db.commit()
 
-    @tc.command()
-    async def clear(self, ctx):
+    @tc.command(name='clear')
+    async def tc_clear(self, ctx):
         """
         Deletes any subscriptions related to the user that were created in the current server.
             Usage: z!tc clear
@@ -196,8 +197,8 @@ class Twitcasting(commands.Cog):
         else:
             await ctx.send(f"{ctx.author.name} has not subscribed to any user on this server.")
 
-    @tc.command()
-    async def clear_channel(self, ctx, channel_name: str):
+    @tc.command(name='clear_channel')
+    async def tc_clear_channel(self, ctx, channel_name: str):
         """
         Deletes any subscriptions related to the user that were created in the current server.
             Usage: z!tc clear
@@ -219,12 +220,12 @@ class Twitcasting(commands.Cog):
         else:
             await ctx.send(f"No subs had been added to {channel_name}. There is nothing to clear.")
 
-    @tc.command()
-    async def purge(self, ctx):
+    @tc.command(name='purge')
+    async def tc_purge(self, ctx):
         pass
 
-    @tc.command(hidden=True)
-    async def update(self, ctx):
+    @tc.command(hidden=True, name='update')
+    async def tc_update(self, ctx):
         """
         Dev command used to update names of locally stored Twitcasting users
         """
@@ -234,13 +235,13 @@ class Twitcasting(commands.Cog):
             print(i.channel)
             print(i.guild)
 
-    async def broadcast(self, request):
+    async def tc_broadcast(self, request):
         """
         Callback function that forwards incoming Twitcasting webhooks to subscribed channels.
         """
         request = await request.json()
         movie, user = self.twitcasting.parse_incoming_webhook(request)
-        res = self.db.get_subs_by_user_id(twitcast_user_id=user.id)
+        res = self.db.get_subs_by_twitcast_user_id(twitcast_user_id=user.id)
         message = f'{user.screen_id} has went live!' if user.is_live else f'{user.screen_id} has gone offline!'
         embed_dict = {
             'title': message,
@@ -250,9 +251,14 @@ class Twitcasting(commands.Cog):
             'thumbnail': {'url': user.image}
         }
         embed = Embed.from_dict(embed_dict)
+        channel_user_dict = {}
         for sub in res:
-            channel = self.bot.get_channel(int(sub.channel_id))
-            await channel.send(f'{message} @here', embed=embed)
+            channel_user_dict.setdefault(sub.channel_id, []).append(sub.user_id)
+        for channel_id, user_ids in channel_user_dict.items():
+            channel = self.bot.get_channel(int(channel_id))
+            fmt_user_ids = list(map(lambda u: f'<@{u}>', user_ids))
+            users_to_ping = ' '.join(fmt_user_ids)
+            await channel.send(f'{message} {users_to_ping}', embed=embed)
         return web.Response(status=200)
 
     def _get_channel_id_from_name(self, channel_name: str):

@@ -15,7 +15,7 @@ LOGS_DIRECTORY = 'data/logs/'
 extensions = [
     'cogs.misc',
     'cogs.tagging',
-    'cogs.twitcasting'
+    'cogs.notifications'
 ]
 
 
@@ -49,7 +49,6 @@ if __name__ == '__main__':
     logging.config.dictConfig(config)
 
     logger = logging.getLogger('zhenpai')
-
     for ext in extensions:
         bot.load_extension(ext)
         logger.info('Loaded extension: %s', ext)
